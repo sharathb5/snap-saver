@@ -1,0 +1,7 @@
+# Development helpers for Snap Saver
+# This file is intentionally minimal for now
+
+# Future additions might include:
+# requests>=2.31.0
+# click>=8.1.0
+# rich>=13.0.0

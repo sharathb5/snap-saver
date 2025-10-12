@@ -1,0 +1,40 @@
+{
+  "Saved Media": [
+    {
+      "Path": "memories/2023/01/photo_001.jpg",
+      "Date": "2023-01-15T10:30:00Z",
+      "File Size": 2048576,
+      "Media Type": "photo"
+    },
+    {
+      "Path": "memories/2023/01/video_001.mp4",
+      "Date": "2023-01-16T14:20:00Z",
+      "File Size": 15728640,
+      "Media Type": "video"
+    },
+    {
+      "Path": "memories/2023/02/photo_002.jpg",
+      "Date": "2023-02-01T09:15:00Z",
+      "File Size": 3145728,
+      "Media Type": "photo"
+    },
+    {
+      "Path": "memories/2023/02/video_002.mp4",
+      "Date": "2023-02-15T16:45:00Z",
+      "File Size": 25165824,
+      "Media Type": "video"
+    },
+    {
+      "Path": "memories/2023/03/photo_003.jpg",
+      "Date": "2023-03-01T11:00:00Z",
+      "File Size": 4194304,
+      "Media Type": "photo"
+    },
+    {
+      "Path": "memories/2023/03/video_003.mp4",
+      "Date": "2023-03-10T13:30:00Z",
+      "File Size": 33554432,
+      "Media Type": "video"
+    }
+  ]
+}
