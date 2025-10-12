@@ -13,6 +13,7 @@ import {
 } from "./lib/types";
 import { computeRiskAnalysis, getItemsForExport } from "./lib/risk";
 import { wakeLock } from "./lib/wakeLock";
+import { getFolderInfo, copyToClipboard } from "./lib/fsAccess";
 
 type AppState = 
   | { type: "idle" }
@@ -23,12 +24,25 @@ type AppState =
 
 export default function App() {
   const [state, setState] = useState<AppState>({ type: "idle" });
-  const [exportMode, setExportMode] = useState<ExportMode>("at-risk");
-  const [destStrategy, setDestStrategy] = useState<"fs-access" | "download-zip">("download-zip");
+  const [exportMode, setExportMode] = useState<ExportMode>(() => {
+    const saved = localStorage.getItem('snap-saver-export-mode');
+    return (saved as ExportMode) || "at-risk";
+  });
+  const [destStrategy, setDestStrategy] = useState<"fs-access" | "download-zip">(() => {
+    const saved = localStorage.getItem('snap-saver-dest-strategy');
+    return (saved as "fs-access" | "download-zip") || "download-zip";
+  });
   const [destHandle, setDestHandle] = useState<FileSystemDirectoryHandle | undefined>();
+  const [folderInfo, setFolderInfo] = useState<{ name: string; path: string } | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
   const [error, setError] = useState<string>("");
   const [unzipWorker, setUnzipWorker] = useState<Worker | null>(null);
   const [exportWorker, setExportWorker] = useState<Worker | null>(null);
+  const [fileValidation, setFileValidation] = useState<{
+    totalFiles: number;
+    validSnapchatExports: number;
+    invalidFiles: string[];
+  } | null>(null);
 
   // Initialize workers
   useEffect(() => {
@@ -109,6 +123,24 @@ export default function App() {
   const handleFilesSelected = useCallback(async (files: File[]) => {
     setError("");
     console.log(`🚀 Starting scan of ${files.length} ZIP file(s)`);
+    
+    // Immediate file validation feedback
+    const validation = {
+      totalFiles: files.length,
+      validSnapchatExports: 0,
+      invalidFiles: [] as string[]
+    };
+    
+    // Quick validation - check if files are ZIPs and have reasonable names
+    for (const file of files) {
+      if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
+        validation.validSnapchatExports++;
+      } else {
+        validation.invalidFiles.push(file.name);
+      }
+    }
+    
+    setFileValidation(validation);
     setState({ type: "scanning", files });
     
     if (unzipWorker) {
@@ -118,9 +150,24 @@ export default function App() {
 
 
   // Handle destination selection
-  const handleDestinationSelected = useCallback((strategy: "fs-access" | "download-zip", handle?: FileSystemDirectoryHandle) => {
+  const handleDestinationSelected = useCallback(async (strategy: "fs-access" | "download-zip", handle?: FileSystemDirectoryHandle) => {
     setDestStrategy(strategy);
     setDestHandle(handle);
+    
+    // Get folder info if using fs-access
+    if (strategy === "fs-access" && handle) {
+      try {
+        const info = await getFolderInfo(handle);
+        setFolderInfo(info);
+      } catch (error) {
+        console.error('Failed to get folder info:', error);
+      }
+    } else {
+      setFolderInfo(null);
+    }
+    
+    // Persist destination strategy
+    localStorage.setItem('snap-saver-dest-strategy', strategy);
   }, []);
 
   // Handle export start
@@ -176,11 +223,27 @@ export default function App() {
     }
   }, [exportWorker, state]);
 
+  // Handle copying folder path
+  const handleCopyPath = useCallback(async () => {
+    if (destHandle && folderInfo) {
+      const success = await copyToClipboard(folderInfo.path);
+      if (success) {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } else {
+        // Fallback: show the path in an alert
+        alert(`Folder path: ${folderInfo.path}\n\nCopy this path and paste it in Finder's "Go to Folder" (Cmd+Shift+G)`);
+      }
+    }
+  }, [destHandle, folderInfo]);
+
   // Reset app
   const handleReset = useCallback(() => {
     setState({ type: "idle" });
     setDestStrategy("download-zip");
     setDestHandle(undefined);
+    setFolderInfo(null);
+    setCopySuccess(false);
     setError("");
     wakeLock.releaseWakeLock();
   }, []);
@@ -224,7 +287,30 @@ export default function App() {
                   disabled={state.type === "scanning"}
                 />
                 
-
+                {/* File validation feedback */}
+                {fileValidation && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-sm text-blue-800">
+                        <strong>Found {fileValidation.totalFiles} file(s)</strong>
+                        {fileValidation.validSnapchatExports > 0 && (
+                          <span> • {fileValidation.validSnapchatExports} valid ZIP file(s)</span>
+                        )}
+                        {fileValidation.invalidFiles.length > 0 && (
+                          <span> • {fileValidation.invalidFiles.length} not ZIP files</span>
+                        )}
+                      </div>
+                    </div>
+                    {fileValidation.invalidFiles.length > 0 && (
+                      <div className="mt-2 text-xs text-blue-700">
+                        Invalid files: {fileValidation.invalidFiles.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               </div>
             )}
@@ -252,7 +338,11 @@ export default function App() {
                         name="exportMode"
                         value="at-risk"
                         checked={exportMode === "at-risk"}
-                        onChange={(e) => setExportMode(e.target.value as ExportMode)}
+                        onChange={(e) => {
+                          const mode = e.target.value as ExportMode;
+                          setExportMode(mode);
+                          localStorage.setItem('snap-saver-export-mode', mode);
+                        }}
                         className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                       />
                       <span className="ml-2 text-sm text-gray-700">
@@ -265,7 +355,11 @@ export default function App() {
                         name="exportMode"
                         value="all"
                         checked={exportMode === "all"}
-                        onChange={(e) => setExportMode(e.target.value as ExportMode)}
+                        onChange={(e) => {
+                          const mode = e.target.value as ExportMode;
+                          setExportMode(mode);
+                          localStorage.setItem('snap-saver-export-mode', mode);
+                        }}
                         className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                       />
                       <span className="ml-2 text-sm text-gray-700">
@@ -311,18 +405,14 @@ export default function App() {
                 
                 {/* Enhanced progress details */}
                 <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-3 gap-4 text-sm">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">{state.progress.copiedCount}</div>
-                      <div className="text-gray-600">Copied</div>
+                      <div className="text-gray-600">Saved</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-yellow-600">{state.progress.skippedCount}</div>
                       <div className="text-gray-600">Skipped</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-600">{state.progress.failedCount}</div>
-                      <div className="text-gray-600">Failed</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{Math.round(state.progress.percent)}%</div>
@@ -334,11 +424,20 @@ export default function App() {
                     <div className="mt-3 p-2 bg-gray-50 rounded text-xs">
                       <div className="font-medium text-gray-700">Current file:</div>
                       <div className="text-gray-600 truncate">{state.progress.currentFile}</div>
+                      {state.progress.status && (
+                        <div className="text-gray-500 mt-1">{state.progress.status}</div>
+                      )}
                     </div>
                   )}
                 </div>
                 
-                <div className="text-center">
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center text-xs text-gray-500">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Keeping your screen awake during export
+                  </div>
                   <button
                     onClick={handleExportCancel}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -368,9 +467,40 @@ export default function App() {
                       : "Your memories have been downloaded as a ZIP file."
                     }
                   </p>
+                  
+                  {/* Show folder info for fs-access */}
+                  {state.destStrategy === "fs-access" && folderInfo && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg text-left">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-gray-900">Saved to folder:</h4>
+                        <button
+                          onClick={handleCopyPath}
+                          className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                            copySuccess 
+                              ? "bg-green-100 text-green-800" 
+                              : "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                          }`}
+                        >
+                          {copySuccess ? "✓ Copied!" : "Copy Path"}
+                        </button>
+                      </div>
+                      <p className="text-sm text-gray-600 font-mono bg-white p-2 rounded border">
+                        {folderInfo.path}
+                      </p>
+                      <div className="mt-3 text-xs text-gray-500">
+                        <p><strong>To open in Finder:</strong></p>
+                        <ol className="list-decimal list-inside mt-1 space-y-1">
+                          <li>Open Finder</li>
+                          <li>Press <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Cmd+Shift+G</kbd></li>
+                          <li>Paste the path above</li>
+                          <li>Press Enter</li>
+                        </ol>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex justify-center">
+                <div className="flex justify-center space-x-3">
                   <button
                     onClick={handleReset}
                     className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"

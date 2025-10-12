@@ -139,6 +139,9 @@ class ExportWorker {
     console.log(`   Total data: ${(this.performanceMetrics.totalBytes / 1024 / 1024).toFixed(2)} MB`);
     console.log(`   Average speed: ${((this.performanceMetrics.totalBytes / 1024 / 1024) / (totalTime / 1000)).toFixed(2)} MB/s`);
     console.log(`   Files processed: ${copiedCount + skippedCount + failedCount}`);
+    console.log(`   ✅ Successfully saved: ${copiedCount}`);
+    console.log(`   ⏭️ Skipped: ${skippedCount}`);
+    console.log(`   ❌ Failed: ${failedCount} (${((failedCount / (copiedCount + skippedCount + failedCount)) * 100).toFixed(1)}%)`);
     console.log(`   Average download time: ${this.performanceMetrics.averageDownloadTime.toFixed(0)}ms`);
     console.log(`   Fastest download: ${this.performanceMetrics.fastestDownload.toFixed(0)}ms`);
     console.log(`   Slowest download: ${this.performanceMetrics.slowestDownload.toFixed(0)}ms`);
@@ -246,6 +249,13 @@ class ExportWorker {
     });
 
     const finalZip = zipSync(zipData);
+
+    // Log performance summary for download ZIP
+    console.log(`📊 Download ZIP Performance Summary:`);
+    console.log(`   ✅ Successfully saved: ${copiedCount}`);
+    console.log(`   ⏭️ Skipped: ${skippedCount}`);
+    console.log(`   ❌ Failed: ${failedCount} (${((failedCount / (copiedCount + skippedCount + failedCount)) * 100).toFixed(1)}%)`);
+    console.log(`   Total files processed: ${copiedCount + skippedCount + failedCount}`);
 
     // Send the ZIP data back to main thread for download
     self.postMessage({

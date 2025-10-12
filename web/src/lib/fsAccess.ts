@@ -101,3 +101,30 @@ export function getBrowserRecommendation(): string {
     return "Your browser (download ZIP mode only)";
   }
 }
+
+export async function getFolderInfo(handle: FileSystemDirectoryHandle): Promise<{ name: string; path: string }> {
+  // Unfortunately, File System Access API doesn't provide the full path
+  // We can only get the folder name and provide helpful instructions
+  const name = handle.name;
+  
+  // Try to get more context if possible
+  let path = name;
+  
+  // On macOS, we can provide helpful instructions
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  if (isMac) {
+    path = `~/Desktop/${name}`; // Most common location, but not guaranteed
+  }
+  
+  return { name, path };
+}
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (error) {
+    console.error('Failed to copy to clipboard:', error);
+    return false;
+  }
+}

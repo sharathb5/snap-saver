@@ -1,0 +1,1 @@
+{"name":"Snap Saver","short_name":"SnapSaver","start_url":"/","display":"standalone","background_color":"#ffffff","lang":"en","scope":"/","description":"Save your Snapchat memories before they're deleted","theme_color":"#3b82f6","icons":[{"src":"pwa-192x192.png","sizes":"192x192","type":"image/png"},{"src":"pwa-512x512.png","sizes":"512x512","type":"image/png"}]}
